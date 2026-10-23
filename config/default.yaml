@@ -1,0 +1,6 @@
+# Local pilot defaults. No setting can authorize a purchase.
+pilot_reagents: 20
+pilot_weeks: 6
+specification_accuracy_target: 0.98
+max_catalog_age_days: 30
+automatic_approval: false

@@ -1,0 +1,12 @@
+{
+  "catalog": [
+    {"cas": "64-17-5", "sku": "ETH-70-500", "product_name": "Ethanol", "concentration": "70%", "package": "500 mL", "updated_at": "2026-10-20"},
+    {"cas": "7647-14-5", "sku": "NACL-1M-1L", "product_name": "Sodium chloride", "concentration": "1 M", "package": "1 L", "updated_at": "2026-10-20"},
+    {"cas": "7732-18-5", "sku": "WATER-1L", "product_name": "Water", "concentration": "100%", "package": "1 L", "updated_at": "2026-10-20"}
+  ],
+  "requests": [
+    {"business_id": "DEMO-001", "version": "v1", "cas": "64-17-5", "concentration": "70%", "package": "500 mL", "budget_approval_present": true, "handoff_receiver": "procurement-reviewer", "handoff_confirmed": true, "cold_chain": false, "hazardous": false},
+    {"business_id": "DEMO-002", "version": "v2", "cas": "7647-14-5", "concentration": "0.9 M", "package": "1 L", "budget_approval_present": true, "handoff_receiver": "procurement-reviewer", "handoff_confirmed": false, "cold_chain": false, "hazardous": false},
+    {"business_id": "DEMO-003", "version": "v1", "cas": "7732-18-5", "concentration": "100%", "package": "1 L", "budget_approval_present": false, "handoff_receiver": "", "handoff_confirmed": false, "cold_chain": true, "temperature_log_present": false, "hazardous": false}
+  ]
+}
