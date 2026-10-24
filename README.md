@@ -6,6 +6,10 @@ A read-only, rule-based prototype for a **synthetic** research procurement case.
 
 The discovery lab recorded 24 of 36 available facts across six roles on 2026-10-23. The strongest first pilot is specification review plus traceable handoff. The current process handles about 160 requests/month, with an average of four confirmation rounds of 20 minutes each. The management goal is to move average procurement duration from 18 to 10 days and urgent purchases from 27% to below 12%; those are **goals, not demonstrated outcomes**. The proposed pilot covers 20 common reagents for six weeks, with at least 98% specification review accuracy and a lower urgent-purchase share. The remaining facts and real-world source material still need validation.
 
+![Procurement review flowchart](docs/flowchart.png)
+
+The editable source is [scripts/render_flowchart.py](scripts/render_flowchart.py), which generates both [PNG](docs/flowchart.png) and [SVG](docs/flowchart.svg).
+
 ## Install
 
 Python 3.11+ is recommended.

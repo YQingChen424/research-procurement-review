@@ -10,7 +10,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path.cwd()
 with ZipFile(root / "dist/research-procurement-review.zip", "w", ZIP_DEFLATED) as archive:
-    for folder in ("src", "config", "data", "docs", "examples"):
+    for folder in ("src", "config", "data", "docs", "examples", "scripts"):
         for path in (root / folder).rglob("*"):
             if path.is_file() and "__pycache__" not in path.parts:
                 archive.write(path, path.relative_to(root))
