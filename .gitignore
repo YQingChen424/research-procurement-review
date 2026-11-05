@@ -24,3 +24,6 @@ Thumbs.db
 
 # Local FAISS prototype index
 .rag_index/
+
+# Isolated local demo database and token
+.local_demo/
