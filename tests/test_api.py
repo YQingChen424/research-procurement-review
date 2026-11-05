@@ -62,6 +62,8 @@ class PilotFlowTest(unittest.TestCase):
             stream = client.post('/chat', json={'question':'冷链试剂验收如何检查温度记录？'}, headers=auth('alice'))
             self.assertEqual(stream.status_code, 200)
             self.assertIn('event: citations', stream.text)
+            self.assertIn('温度记录', stream.text)
+            self.assertIn('模拟冷链制度', stream.text)
             self.assertIn('event: delta', stream.text)
             self.assertIn('event: done', stream.text)
             import json
@@ -71,6 +73,8 @@ class PilotFlowTest(unittest.TestCase):
             self.assertEqual([m['role'] for m in history['messages']], ['user', 'assistant'])
             self.assertEqual(client.post('/chat', json={'session_id':chat_id, 'question':'继续说'}, headers=auth('bob')).status_code, 404)
             self.assertEqual(client.get('/chat-ui').status_code, 200)
+            unknown = client.post('/chat', json={'question':'火星宇宙飞船引擎的工作原理是什么？'}, headers=auth('alice'))
+            self.assertIn('制度中未找到', unknown.text)
             from unittest.mock import patch
             captured = []
             async def mocked_answer(question, citations, history):

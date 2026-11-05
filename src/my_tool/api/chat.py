@@ -13,7 +13,8 @@ from sqlalchemy import select
 from my_tool.api.app import Actor, DB
 from my_tool.db.models import Audit, Chunk, Conversation, Document, Message
 from my_tool.db.session import Session
-from my_tool.services.knowledge import cosine, embed, provider_name
+from my_tool.services.knowledge import embed, provider_name
+from my_tool.services.retrieval import rank_policy_chunks
 
 router = APIRouter()
 locks = {}
@@ -96,8 +97,8 @@ async def chat(data: ChatInput, request: Request, actor: Actor, db: DB):
                         history.extend([{'role': 'user', 'content': rows[i].content}, {'role': 'assistant', 'content': rows[i+1].content}])
                 vector = await embed(data.question)
                 records = (await session.execute(select(Chunk, Document).join(Document).where(Document.status == 'active', Chunk.embedding_model == provider_name()))).all()
-                ranked = sorted(((cosine(vector, c.embedding), c, d) for c, d in records), key=lambda item: item[0], reverse=True)
-                citations = [{'document_id': d.id, 'title': d.title, 'version': d.version, 'source': d.source, 'paragraph': c.position, 'content': c.content} for score, c, d in ranked[:3] if score >= 0.25]
+                ranked = await asyncio.to_thread(rank_policy_chunks, data.question, vector, records)
+                citations = [{'document_id': d.id, 'title': d.title, 'version': d.version, 'source': d.source, 'paragraph': c.position, 'content': c.content} for c, d in ranked]
                 yield event('citations', {'items': citations})
                 pieces = []
                 async for piece in generate_answer(data.question, citations, history):
