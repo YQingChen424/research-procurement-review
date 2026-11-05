@@ -93,8 +93,8 @@ async def chat(data: ChatInput, request: Request, actor: Actor, db: DB):
 
     async def stream():
         try:
-            yield event('status', {'session_id': session_id, 'message': '正在检索采购制度…'})
             async with asyncio.timeout(240), Session() as session:
+                yield event('status', {'session_id': session_id, 'message': '正在检索采购制度…'})
                 # 成对读取最近六轮，避免将不完整历史传给模型。
                 rows = (await session.scalars(select(Message).where(Message.conversation_id == session_id).order_by(Message.id.desc()).limit(12))).all()
                 rows.reverse()
