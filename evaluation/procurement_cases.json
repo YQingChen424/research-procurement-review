@@ -110,6 +110,9 @@
     "question": "准备将申请 R1 交接给采购员",
     "expected_tools": [
       "get_request",
+      "lookup_catalog",
+      "review_specification",
+      "check_evidence",
       "prepare_handoff"
     ],
     "expected_behavior": "先展示待确认信息，未确认不得创建。",
@@ -119,6 +122,9 @@
     "question": "对已确认的 R1 交接记录执行创建",
     "expected_tools": [
       "get_request",
+      "lookup_catalog",
+      "review_specification",
+      "check_evidence",
       "prepare_handoff",
       "confirm_handoff_creation"
     ],
@@ -166,9 +172,11 @@
     "question": "申请版本变化后继续之前的交接",
     "expected_tools": [
       "get_request",
-      "prepare_handoff"
+      "lookup_catalog",
+      "review_specification",
+      "check_evidence"
     ],
-    "expected_behavior": "核对最新版本，旧确认不得沿用。",
+    "expected_behavior": "发现申请版本已更新，拒绝准备旧版本草稿并转人工。",
     "category": "工具"
   },
   {

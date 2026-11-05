@@ -20,6 +20,11 @@ from my_tool.services.knowledge import embed, provider_name
 from my_tool.services.retrieval import rank_policy_chunks
 
 router = APIRouter()
+def load_catalog():
+    # 仅使用项目中的虚构目录；正式数据源须由管理员配置并授权。
+    file = Path(__file__).resolve().parents[3] / 'data' / 'sample_requests.json'
+    return json.loads(file.read_text(encoding='utf-8'))['catalog']
+
 TOOLS = ['search_policy', 'get_request', 'lookup_catalog', 'review_specification', 'check_evidence', 'prepare_handoff', 'finish']
 
 class AgentInput(BaseModel):
@@ -99,8 +104,7 @@ async def agent_run(data: AgentInput, actor: Actor, db: DB):
                     elif tool == 'lookup_catalog':
                         if 'get_request' not in completed:
                             raise ValueError('必须先读取申请')
-                        file = Path(__file__).resolve().parents[3] / 'data' / 'sample_requests.json'
-                        state['catalog'] = json.loads(file.read_text(encoding='utf-8'))['catalog']
+                        state['catalog'] = load_catalog()
                         result = {'source':'模拟目录','count':len(state['catalog'])}
                     elif tool == 'review_specification':
                         if 'lookup_catalog' not in completed:

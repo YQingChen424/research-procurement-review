@@ -123,6 +123,25 @@ class PilotFlowTest(unittest.TestCase):
                 self.assertEqual(client.get('/admin/audit/conversations', headers=auth('alice')).status_code, 403)
                 self.assertGreater(len(client.get('/admin/audit/conversations', headers=admin_auth).json()), 0)
                 self.assertEqual(client.get('/admin-ui').status_code, 200)
+                from io import BytesIO
+                from pypdf import PdfWriter
+                from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
+                writer=PdfWriter(); page=writer.add_blank_page(width=200,height=200)
+                font=DictionaryObject({NameObject('/Type'):NameObject('/Font'),NameObject('/Subtype'):NameObject('/Type1'),NameObject('/BaseFont'):NameObject('/Helvetica')})
+                page[NameObject('/Resources')]=DictionaryObject({NameObject('/Font'):DictionaryObject({NameObject('/F1'):font})})
+                pdfstream=DecodedStreamObject(); pdfstream.set_data(b'BT /F1 12 Tf 20 100 Td (Cold chain inspection) Tj ET'); page[NameObject('/Contents')]=pdfstream
+                pdf=BytesIO(); writer.write(pdf)
+                pdf_response=client.post('/admin/documents',data={'title':'PDF制度','version':'v1'},files={'file':('policy.pdf',pdf.getvalue(),'application/pdf')},headers=admin_auth)
+                self.assertEqual(pdf_response.status_code,201,pdf_response.text)
+                message_id=client.get('/admin/audit/conversations',headers=admin_auth).json()[0]['message_id']
+                self.assertEqual(client.post(f'/admin/audit/messages/{message_id}/flags',json={'reason':'人工复核'},headers=admin_auth).status_code,201)
+                captured_template=[]
+                async def check_template(question, citations, history, template=None):
+                    captured_template.append(template)
+                    yield '示例'
+                with patch('my_tool.api.chat.generate_answer',check_template):
+                    client.post('/chat',json={'question':'采购试剂浓度和包装'},headers=auth('alice'))
+                self.assertEqual(captured_template[-1],'请引用制度内容。')
             os.environ.pop('AGENT_MODEL', None)
             policy_run = client.post('/agent/run', json={'question':'冷链试剂验收温度记录'}, headers=auth('alice'))
             self.assertIn('search_policy', policy_run.text)

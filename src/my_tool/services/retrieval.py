@@ -2,7 +2,8 @@
 import math
 from collections import Counter
 import jieba
-from my_tool.services.knowledge import cosine
+import faiss
+import numpy as np
 
 jieba.setLogLevel(40)
 STOP_WORDS = {'什么', '怎么', '怎么办', '如何', '需要', '可以', '是否', '应该', '请问', '有关', '规定', '要求', '制度', '进行', '以及', '相关', '一个', '这个', '的是', '哪些', '工作', '原理'}
@@ -30,7 +31,19 @@ def rank_policy_chunks(question, vector, records):
                 tf = count[term]
                 score += idf * tf * 2.5 / (tf + 1.5 * (0.25 + 0.75 * length / avg))
         lexical.append(score)
-    vector_scores = [cosine(vector, chunk.embedding) for chunk, _ in records]
+    # 以当前有权限的有效数据库片段构建精确 FAISS 索引，避免引用已停用的本地文件索引。
+    matrix = np.ascontiguousarray([list(chunk.embedding) for chunk, _ in records], dtype=np.float32)
+    query_vector = np.ascontiguousarray(np.asarray(vector, dtype=np.float32).reshape(1, -1))
+    if matrix.shape[1] != query_vector.shape[1]:
+        raise ValueError('问题向量和制度向量维度不一致')
+    faiss.normalize_L2(matrix)
+    faiss.normalize_L2(query_vector)
+    vector_index = faiss.IndexFlatIP(matrix.shape[1])
+    vector_index.add(matrix)
+    scores, positions = vector_index.search(query_vector, len(records))
+    vector_scores = [0.0] * len(records)
+    for i, score in zip(positions[0], scores[0]):
+        if i >= 0: vector_scores[int(i)] = float(score)
     combined = {}
     for values, threshold in [(lexical, 0), (vector_scores, 0.25)]:
         order = sorted(range(len(records)), key=lambda i: values[i], reverse=True)

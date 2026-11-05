@@ -1,5 +1,8 @@
 """运行模拟评测，保存真实观测；未实现的多轮能力标为未运行。"""
 import argparse
+from contextlib import nullcontext
+from unittest.mock import patch
+from datetime import date
 import hashlib
 import json
 import os
@@ -75,10 +78,23 @@ def main():
                 request={'question':case['question']}
                 if case['category']=='工具' and 'get_request' in case['expected_tools']:
                     request['version_id']=version_id
+                    if case['question'] in {'找不到 CAS 的申请如何审核','冷链记录缺失的申请可以通过吗','申请版本变化后继续之前的交接'}:
+                        fixture = dict(payload, business_id='EVAL-'+str(number))
+                        if case['question'] == '找不到 CAS 的申请如何审核': fixture['cas'] = '000-00-0'
+                        if case['question'] == '冷链记录缺失的申请可以通过吗': fixture.update(cold_chain=True,temperature_log_present=False)
+                        item = client.post('/requests',json=fixture,headers=headers); item.raise_for_status()
+                        request['version_id'] = item.json()['version_id']
+                        if case['question'] == '申请版本变化后继续之前的交接':
+                            updated = client.post(f"/requests/{item.json()['request_id']}/versions",json=dict(fixture,version='v2'),headers=headers); updated.raise_for_status()
+                            request['receiver_id'] = receiver_id
                     if 'prepare_handoff' in case['expected_tools']:
                         request['receiver_id']=receiver_id
                 try:
-                    response=client.post('/agent/run',json=request,headers=headers,timeout=30)
+                    # 重复目录仅在本次请求中注入，不修改项目文件或业务数据。
+                    catalog_item={'cas':'64-17-5','concentration':'70%','package':'500 mL','updated_at':date.today().isoformat(),'sku':'synthetic-a'}
+                    fixture_patch=patch('my_tool.api.agent.load_catalog',return_value=[catalog_item,dict(catalog_item,sku='synthetic-b')]) if case['question']=='目录有两个相同候选如何处理' else nullcontext()
+                    with fixture_patch:
+                        response=client.post('/agent/run',json=request,headers=headers,timeout=30)
                     response.raise_for_status()
                     events=[]
                     for block in response.text.split('\n\n'):
@@ -87,6 +103,12 @@ def main():
                         data=next((line[6:] for line in lines if line.startswith('data: ')),None)
                         if kind and data: events.append({'event':kind,'data':json.loads(data)})
                     observed=[event['data']['tool'] for event in events if event['event']=='tool' and event['data']['tool']!='finish']
+                    if case['question'] == '对已确认的 R1 交接记录执行创建':
+                        draft = next((e['data']['draft_id'] for e in events if e['event']=='confirmation_required'), None)
+                        if draft is not None:
+                            confirmation = client.post(f'/agent/drafts/{draft}/confirm',json={'confirm':True},headers=headers)
+                            events.append({'event':'test_confirmation','data':{'status_code':confirmation.status_code}})
+                            if confirmation.status_code == 200: observed.append('confirm_handoff_creation')
                     result.update(status='needs_manual_review',observed_tools=observed,tool_order_matches=(observed==case['expected_tools']),events=events)
                 except (httpx.HTTPError, ValueError) as exc:
                     result.update(status='error',error=type(exc).__name__)
