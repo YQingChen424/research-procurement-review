@@ -71,6 +71,26 @@ class PilotFlowTest(unittest.TestCase):
             self.assertEqual([m['role'] for m in history['messages']], ['user', 'assistant'])
             self.assertEqual(client.post('/chat', json={'session_id':chat_id, 'question':'继续说'}, headers=auth('bob')).status_code, 404)
             self.assertEqual(client.get('/chat-ui').status_code, 200)
+            from unittest.mock import patch
+            captured = []
+            async def mocked_answer(question, citations, history):
+                captured.append(history)
+                yield '模拟回答'
+            with patch('my_tool.api.chat.generate_answer', mocked_answer):
+                for i in range(7):
+                    follow = client.post('/chat', json={'session_id':chat_id, 'question':f'冷链复核问题{i}'}, headers=auth('alice'))
+                    self.assertIn('event: done', follow.text)
+            self.assertEqual(len(captured[-1]), 12)
+            self.assertEqual([row['role'] for row in captured[-1]], ['user', 'assistant'] * 6)
+            before_failure = len(client.get(f'/conversations/{chat_id}', headers=auth('alice')).json()['messages'])
+            async def failing_answer(question, citations, history):
+                yield '部分回答'
+                raise RuntimeError('provider failed')
+            with patch('my_tool.api.chat.generate_answer', failing_answer):
+                failed = client.post('/chat', json={'session_id':chat_id, 'question':'模拟失败问题'}, headers=auth('alice'))
+            self.assertIn('event: error', failed.text)
+            self.assertNotIn('event: done', failed.text)
+            self.assertEqual(len(client.get(f'/conversations/{chat_id}', headers=auth('alice')).json()['messages']), before_failure)
             self.assertEqual(client.get(f"/conversations/{response['conversation_id']}", headers=auth('bob')).status_code, 404)
             empty = client.post('/questions', json={'question':'火星宇宙飞船引擎设计'}, headers=auth('alice')).json()
             self.assertEqual(empty['citations'], [])
