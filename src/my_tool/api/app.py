@@ -178,6 +178,8 @@ async def create_version(request_id: int, data: RequestInput, actor: Actor, db: 
     record = await visible_request(db, actor, request_id)
     if actor.id != record.owner_id:
         raise HTTPException(403, 'Only the owner may add a version')
+    # PostgreSQL 下与草稿确认共用申请行锁，避免确认时版本并发变化。
+    await db.scalar(select(ProcurementRequest).where(ProcurementRequest.id == record.id).with_for_update())
     if data.business_id != record.business_id:
         raise HTTPException(422, 'Business ID cannot change')
     version = RequestVersion(request_id=record.id, version=data.version, payload=data.model_dump())
@@ -351,3 +353,6 @@ app.include_router(chat_router)
 
 from my_tool.api.admin import router as admin_router
 app.include_router(admin_router)
+
+from my_tool.api.agent import router as agent_router
+app.include_router(agent_router)

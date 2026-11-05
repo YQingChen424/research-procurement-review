@@ -121,6 +121,51 @@ class PilotFlowTest(unittest.TestCase):
                 self.assertEqual(client.get('/admin/audit/conversations', headers=auth('alice')).status_code, 403)
                 self.assertGreater(len(client.get('/admin/audit/conversations', headers=admin_auth).json()), 0)
                 self.assertEqual(client.get('/admin-ui').status_code, 200)
+            os.environ.pop('AGENT_MODEL', None)
+            policy_run = client.post('/agent/run', json={'question':'冷链试剂验收温度记录'}, headers=auth('alice'))
+            self.assertIn('search_policy', policy_run.text)
+            self.assertIn('event: done', policy_run.text)
+            request2 = client.post('/requests', json={**payload,'business_id':'DEMO-AGENT'}, headers=auth('alice')).json()
+            from datetime import date as current_date
+            with patch('my_tool.api.agent.date') as mocked_date:
+                mocked_date.today.return_value = current_date(2026,10,23)
+                result = client.post('/agent/run', json={'question':'核查并交接', 'version_id':request2['version_id'],'receiver_id':users['reviewer']}, headers=auth('alice'))
+            self.assertIn('event: confirmation_required', result.text, result.text)
+            events = [(line[7:],json.loads(nxt[6:])) for line,nxt in zip(result.text.splitlines(),result.text.splitlines()[1:]) if line.startswith('event: ') and nxt.startswith('data: ')]
+            draft = next(v for k,v in events if k == 'confirmation_required')
+            self.assertEqual(client.post(f"/agent/drafts/{draft['draft_id']}/confirm", json={'confirm':True}, headers=auth('bob')).status_code, 404)
+            confirmed = client.post(f"/agent/drafts/{draft['draft_id']}/confirm", json={'confirm':True}, headers=auth('alice'))
+            self.assertEqual(confirmed.status_code, 200, confirmed.text)
+            self.assertFalse(confirmed.json()['approved'])
+            self.assertEqual(client.post(f"/agent/drafts/{draft['draft_id']}/confirm", json={'confirm':True}, headers=auth('alice')).status_code, 409)
+            self.assertEqual(client.get(f"/handoffs/{confirmed.json()['handoff_id']}",headers=auth('reviewer')).json()['status'],'pending')
+            async def bad_planner(question, completed, mode, observations): return 'prepare_handoff'
+            with patch('my_tool.api.agent.choose_tool',bad_planner):
+                rejected = client.post('/agent/run', json={'question':'跳过检查','version_id':request2['version_id'],'receiver_id':users['reviewer']}, headers=auth('alice'))
+                self.assertIn('event: error', rejected.text)
+            evidence = client.post('/agent/run', json={'question':'核对凭证','version_id':request2['version_id']}, headers=auth('alice'))
+            self.assertIn('check_evidence', evidence.text)
+
+from my_tool.api.agent import choose_tool
+from unittest.mock import patch
+import json
+import httpx
+
+class AgentPlannerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_real_adapter_sends_previous_tool_results(self):
+        received = []
+        def handler(request):
+            received.append(json.loads(request.content))
+            return httpx.Response(200, json={'choices':[{'message':{'tool_calls':[{'function':{'name':'finish','arguments':'{}'}}]}}]})
+        real_client = httpx.AsyncClient
+        def client(**kwargs): return real_client(transport=httpx.MockTransport(handler), **kwargs)
+        env = {'AGENT_MODEL':'mock','MODEL_API_BASE':'https://example.test/v1','MODEL_API_KEY':'fake'}
+        with patch.dict(os.environ,env), patch('my_tool.api.agent.httpx.AsyncClient',side_effect=client):
+            result = await choose_tool('查看制度',['search_policy'],'policy',[{'tool':'search_policy','result':{'message':'未找到'}}])
+        self.assertEqual(result,'finish')
+        self.assertIn('未找到', received[0]['messages'][1]['content'])
+        self.assertTrue(received[0]['tools'])
+
 
 if __name__ == '__main__':
     unittest.main()

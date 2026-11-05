@@ -121,3 +121,31 @@ class MessageFlag(Base):
     actor_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     reason: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class AgentRun(Base):
+    __tablename__ = 'agent_runs'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    status: Mapped[str] = mapped_column(String(30), default='running')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class AgentStep(Base):
+    __tablename__ = 'agent_steps'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey('agent_runs.id'))
+    tool: Mapped[str] = mapped_column(String(50))
+    parameters: Mapped[dict] = mapped_column(JSON)
+    elapsed_ms: Mapped[int] = mapped_column(Integer)
+    result_summary: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class AgentDraft(Base):
+    __tablename__ = 'agent_drafts'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    version_id: Mapped[int] = mapped_column(ForeignKey('request_versions.id'))
+    receiver_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    unresolved: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default='pending')
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
