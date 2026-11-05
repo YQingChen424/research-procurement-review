@@ -77,3 +77,22 @@ PostgreSQL 集成测试可通过 `TEST_DATABASE_URL` 指向**专门的空测试�
 完成本指南中的账号创建后，启动服务并打开 `http://127.0.0.1:8000/chat-ui`。管理员需先使用 `POST /documents` 添加模拟制度；然后在页面中输入申请人或审核人的演示令牌并提问。令牌仅保存在当前浏览器标签页，点击“新建会话”开始新的对话。
 
 `POST /chat` 接收 `session_id`（首次为 null）和 `question`，返回 SSE `status`、`citations`、`delta`、`done` 或 `error`。成功后一次保存完整的问答和引用；连接中断或生成失败时不保存半轮。外部模型配置后会发送最近六轮完整问答与当前制度片段；未配置时显示本地摘录。目前页面对数据库中的制度段落进行 BM25 与向量融合检索，独立的 FAISS 索引尚未整合。SSE 会话并发锁仅适用于单进程演示，不适合多进程部署。
+
+## 管理后台（试点）
+
+启动服务前，在相同 PowerShell 会话中配置随机签名密钥并创建管理员账号（密码至少 12 位）：
+
+```powershell
+$env:PYTHONPATH = 'src'
+$env:PILOT_JWT_SECRET = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$env:PILOT_USERNAME = 'pilot-admin'
+$env:PILOT_ROLE = 'admin'
+$env:PILOT_PASSWORD = Read-Host '输入试点管理员密码'
+python -m my_tool.create_account
+Remove-Item Env:PILOT_PASSWORD
+python -m uvicorn my_tool.api.app:app --host 127.0.0.1 --port 8000
+```
+
+访问 `http://127.0.0.1:8000/admin-ui` 登录。上传 UTF-8 Markdown 或可提取文本的 PDF（最多 2 MB、100 页），文档分片并索引；可发布问答模板、筛选审计消息及标记待复核。制度列表和停用使用已有接口 `GET /documents` 与 `POST /documents/{id}/retire`。模板追加在固定系统安全约束之后，不能替代权限校验。
+
+JWT 默认有效 30 分钟；更改签名密钥将使旧 JWT 失效。此账号与旧演示令牌并存，登录密码使用 PBKDF2 哈希，尚未实现企业 SSO、令牌撤销、登录限流、文档级权限、审计员独立角色、PDF OCR 或生产级文件扫描。仅用于模拟试点，不可视为正式上线配置。

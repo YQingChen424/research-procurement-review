@@ -101,3 +101,23 @@ class Audit(Base):
     object_type: Mapped[str] = mapped_column(String(40))
     object_id: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class PasswordAccount(Base):
+    __tablename__ = 'password_accounts'
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+
+class PromptTemplate(Base):
+    __tablename__ = 'prompt_templates'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class MessageFlag(Base):
+    __tablename__ = 'message_flags'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey('messages.id'))
+    actor_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

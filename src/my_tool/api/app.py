@@ -31,7 +31,13 @@ async def current_user(db: DB, authorization: Annotated[str | None, Header()] = 
     digest = hashlib.sha256(authorization[7:].encode()).hexdigest()
     user = await db.scalar(select(User).where(User.token_hash == digest, User.active.is_(True)))
     if not user:
-        raise HTTPException(401, 'Invalid credentials')
+        try:
+            from my_tool.services.auth import decode_token
+            user = await db.get(User, decode_token(authorization[7:]))
+        except Exception:
+            user = None
+    if not user or not user.active:
+        raise HTTPException(401, '认证失败')
     return user
 
 Actor = Annotated[User, Depends(current_user)]
@@ -342,3 +348,6 @@ async def get_conversation(conversation_id: int, actor: Actor, db: DB):
 # 页面与流式聊天路由复用本模块的认证依赖。
 from my_tool.api.chat import router as chat_router
 app.include_router(chat_router)
+
+from my_tool.api.admin import router as admin_router
+app.include_router(admin_router)

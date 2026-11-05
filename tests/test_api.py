@@ -13,7 +13,8 @@ os.environ.pop('CHAT_MODEL', None)
 os.environ.pop('EMBEDDING_MODEL', None)
 from fastapi.testclient import TestClient
 from my_tool.api.app import app
-from my_tool.db.models import User
+from my_tool.db.models import PasswordAccount, User
+from my_tool.services.auth import hash_password
 from my_tool.db.session import Session
 
 TOKENS = {'alice': 'a'*40, 'bob': 'b'*40, 'reviewer': 'c'*40, 'admin': 'd'*40}
@@ -24,6 +25,10 @@ async def seed():
     async with Session() as db:
         for name, role in [('alice','applicant'), ('bob','applicant'), ('reviewer','reviewer'), ('admin','admin')]:
             db.add(User(username=name, role=role, token_hash=hashlib.sha256(TOKENS[name].encode()).hexdigest()))
+        await db.flush()
+        from sqlalchemy import select
+        admin = await db.scalar(select(User).where(User.username == 'admin'))
+        db.add(PasswordAccount(user_id=admin.id, password_hash=hash_password('test-password-123')))
         await db.commit()
 
 class PilotFlowTest(unittest.TestCase):
@@ -77,7 +82,7 @@ class PilotFlowTest(unittest.TestCase):
             self.assertIn('制度中未找到', unknown.text)
             from unittest.mock import patch
             captured = []
-            async def mocked_answer(question, citations, history):
+            async def mocked_answer(question, citations, history, template=None):
                 captured.append(history)
                 yield '模拟回答'
             with patch('my_tool.api.chat.generate_answer', mocked_answer):
@@ -87,7 +92,7 @@ class PilotFlowTest(unittest.TestCase):
             self.assertEqual(len(captured[-1]), 12)
             self.assertEqual([row['role'] for row in captured[-1]], ['user', 'assistant'] * 6)
             before_failure = len(client.get(f'/conversations/{chat_id}', headers=auth('alice')).json()['messages'])
-            async def failing_answer(question, citations, history):
+            async def failing_answer(question, citations, history, template=None):
                 yield '部分回答'
                 raise RuntimeError('provider failed')
             with patch('my_tool.api.chat.generate_answer', failing_answer):
@@ -101,6 +106,21 @@ class PilotFlowTest(unittest.TestCase):
             self.assertIn('未找到', empty['answer'])
             self.assertEqual(client.post('/documents/1/retire', headers=auth('admin')).status_code, 200)
             self.assertEqual(client.post('/questions', json={'question':'冷链试剂验收温度记录'}, headers=auth('alice')).json()['citations'], [])
+            with patch.dict(os.environ, {'PILOT_JWT_SECRET':'x'*40}):
+                self.assertEqual(client.post('/auth/login', json={'username':'admin','password':'wrong'}).status_code, 401)
+                login = client.post('/auth/login', json={'username':'admin','password':'test-password-123'})
+                self.assertEqual(login.status_code, 200, login.text)
+                admin_auth = {'Authorization':'Bearer ' + login.json()['access_token']}
+                self.assertEqual(client.get('/me', headers=admin_auth).json()['role'], 'admin')
+                self.assertEqual(client.post('/admin/prompts', json={'content':'请引用制度内容。'}, headers=auth('alice')).status_code, 403)
+                self.assertEqual(client.post('/admin/prompts', json={'content':'请引用制度内容。'}, headers=admin_auth).status_code, 201)
+                self.assertEqual(client.get('/admin/prompts', headers=admin_auth).json()[0]['content'], '请引用制度内容。')
+                upload = client.post('/admin/documents', data={'title':'上传制度','version':'v1'}, files={'file':('policy.md','采购试剂需要核对浓度和包装。'.encode('utf-8'),'text/markdown')}, headers=admin_auth)
+                self.assertEqual(upload.status_code, 201, upload.text)
+                self.assertEqual(client.post('/admin/documents', data={'title':'错误','version':'v1'}, files={'file':('bad.txt',b'text','text/plain')}, headers=admin_auth).status_code, 422)
+                self.assertEqual(client.get('/admin/audit/conversations', headers=auth('alice')).status_code, 403)
+                self.assertGreater(len(client.get('/admin/audit/conversations', headers=admin_auth).json()), 0)
+                self.assertEqual(client.get('/admin-ui').status_code, 200)
 
 if __name__ == '__main__':
     unittest.main()
