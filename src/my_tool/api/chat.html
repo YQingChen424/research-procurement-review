@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>科研采购制度助手</title>
+<style>
+:root{font-family:"Microsoft YaHei",sans-serif;color:#1b3240;background:#edf3f2}*{box-sizing:border-box}body{margin:0}.shell{max-width:960px;margin:32px auto;padding:0 20px}header{display:flex;justify-content:space-between;align-items:center;gap:16px}h1{font-size:26px;margin:0}.sub{color:#58717c;font-size:14px}.card{background:#fff;border:1px solid #d7e5e2;border-radius:18px;box-shadow:0 12px 36px #183c3a0c}.auth{padding:15px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0}.auth input{flex:1;min-width:180px}.chat{height:65vh;min-height:400px;display:flex;flex-direction:column}.messages{padding:24px;overflow:auto;flex:1}.bubble{max-width:85%;padding:14px 17px;border-radius:15px;white-space:pre-wrap;line-height:1.7;margin:0 0 16px}.user{margin-left:auto;background:#16685f;color:#fff}.assistant{background:#f1f6f5}.sources{font-size:12px;color:#526d75;border-top:1px solid #d8e5e3;margin-top:12px;padding-top:8px}.status{padding:0 24px;color:#53746c;font-size:13px;min-height:22px}.composer{display:flex;gap:10px;padding:15px;border-top:1px solid #e0ece9}textarea,input{border:1px solid #bed2cd;border-radius:10px;padding:10px;font:inherit}textarea{resize:vertical;flex:1;min-height:48px;max-height:150px}button{border:0;border-radius:10px;background:#176d61;color:white;padding:10px 16px;font:inherit;cursor:pointer}button.secondary{background:#e3efec;color:#265a52}button:disabled{opacity:.5;cursor:wait}.note{font-size:12px;color:#657e84;margin-top:12px}@media(max-width:600px){header{align-items:flex-start;flex-direction:column}.bubble{max-width:95%}.shell{margin:18px auto}}
+</style>
+</head>
+<body><main class="shell">
+<header><div><h1>科研采购制度助手</h1><p class="sub">查询试剂规格、冷链验收与采购交接制度</p></div><button class="secondary" id="new">新建会话</button></header>
+<div class="card auth"><label for="token">演示访问令牌</label><input id="token" type="password" autocomplete="off" placeholder="输入账号令牌"><button class="secondary" id="save">使用令牌</button></div>
+<section class="card chat"><div class="messages" id="messages"><div class="bubble assistant">你好，请输入科研采购制度相关的问题。我会展示可供核对的制度来源。</div></div><div class="status" id="status"></div><form class="composer" id="form"><textarea id="question" placeholder="例如：冷链试剂验收时需要检查什么？" required maxlength="2000"></textarea><button id="send">发送</button></form></section>
+<p class="note">请使用模拟数据。涉及危险品、冷链、预算等事项，请由授权人员复核。</p>
+</main><script>
+// 令牌只保留在当前标签页，不写入网页或版本库。
+const token=document.querySelector('#token'), messages=document.querySelector('#messages'), status=document.querySelector('#status'), send=document.querySelector('#send'), question=document.querySelector('#question');
+token.value=sessionStorage.getItem('pilot_token')||'';let sessionId=null;
+document.querySelector('#save').onclick=()=>{sessionStorage.setItem('pilot_token',token.value.trim());status.textContent='令牌已在当前标签页设置。'};
+document.querySelector('#new').onclick=()=>{sessionId=null;messages.replaceChildren();status.textContent='已开始新会话。'};
+function bubble(role,text){const el=document.createElement('div');el.className='bubble '+role;el.textContent=text;messages.appendChild(el);messages.scrollTop=messages.scrollHeight;return el;}
+// fetch 支持 POST 与 Authorization，逐块解析 SSE；所有内容用 textContent 防止脚本注入。
+document.querySelector('#form').onsubmit=async e=>{e.preventDefault();const q=question.value.trim();if(q.length<2){status.textContent='请输入至少两个字符的问题。';return}const credential=sessionStorage.getItem('pilot_token');if(!credential){status.textContent='请先设置演示访问令牌。';return}question.value='';bubble('user',q);const output=bubble('assistant','');let content='',sources=[];send.disabled=true;status.textContent='正在连接…';
+try{const response=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+credential},body:JSON.stringify({session_id:sessionId,question:q})});if(!response.ok){let body=await response.json().catch(()=>({}));throw new Error(body.detail?.message||'请求失败，请检查访问令牌或问题内容。')}
+const reader=response.body.getReader(), decoder=new TextDecoder();let buffer='',doneEvent=false;while(true){const part=await reader.read();if(part.done)break;buffer+=decoder.decode(part.value,{stream:true}).replace(/\r\n/g,'\n');let split;while((split=buffer.indexOf('\n\n'))>=0){const raw=buffer.slice(0,split);buffer=buffer.slice(split+2);const kind=raw.match(/^event: (.+)$/m)?.[1],data=raw.match(/^data: (.+)$/m)?.[1];if(!data)continue;const obj=JSON.parse(data);if(kind==='status'){status.textContent=obj.message;sessionId=obj.session_id}else if(kind==='delta'){content+=obj.text;output.textContent=content;messages.scrollTop=messages.scrollHeight}else if(kind==='citations'){sources=obj.items}else if(kind==='error'){throw new Error(obj.message)}else if(kind==='done'){doneEvent=true;status.textContent='回答完成';}}}
+if(!doneEvent)throw new Error('连接中断，回答未保存，请重试。');if(sources.length){const box=document.createElement('div');box.className='sources';box.textContent='引用来源：\n'+sources.map((s,i)=>`[${i+1}] ${s.title}（${s.version}），第 ${s.paragraph} 段\n${s.content}`).join('\n\n');output.appendChild(box)}
+}catch(err){status.textContent=err.message||'网络连接失败，请重试。';if(!content)output.textContent='本次未能生成回答。'}finally{send.disabled=false;messages.scrollTop=messages.scrollHeight}};
+</script></body></html>

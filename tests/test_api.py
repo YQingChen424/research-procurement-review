@@ -59,6 +59,18 @@ class PilotFlowTest(unittest.TestCase):
             self.assertEqual(client.post('/documents', json=doc, headers=auth('admin')).status_code, 201)
             response = client.post('/questions', json={'question':'冷链试剂验收如何检查温度记录？'}, headers=auth('alice')).json()
             self.assertEqual(response['citations'][0]['version'], 'v1')
+            stream = client.post('/chat', json={'question':'冷链试剂验收如何检查温度记录？'}, headers=auth('alice'))
+            self.assertEqual(stream.status_code, 200)
+            self.assertIn('event: citations', stream.text)
+            self.assertIn('event: delta', stream.text)
+            self.assertIn('event: done', stream.text)
+            import json
+            event_data = [json.loads(line[6:]) for line in stream.text.splitlines() if line.startswith('data: ')]
+            chat_id = event_data[0]['session_id']
+            history = client.get(f'/conversations/{chat_id}', headers=auth('alice')).json()
+            self.assertEqual([m['role'] for m in history['messages']], ['user', 'assistant'])
+            self.assertEqual(client.post('/chat', json={'session_id':chat_id, 'question':'继续说'}, headers=auth('bob')).status_code, 404)
+            self.assertEqual(client.get('/chat-ui').status_code, 200)
             self.assertEqual(client.get(f"/conversations/{response['conversation_id']}", headers=auth('bob')).status_code, 404)
             empty = client.post('/questions', json={'question':'火星宇宙飞船引擎设计'}, headers=auth('alice')).json()
             self.assertEqual(empty['citations'], [])

@@ -337,3 +337,8 @@ async def get_conversation(conversation_id: int, actor: Actor, db: DB):
     audit(db, actor, 'read', 'conversation', conversation.id)
     await save(db)
     return {'id': conversation.id, 'messages': [{'role': m.role, 'content': m.content, 'citations': m.citations} for m in messages]}
+
+
+# 页面与流式聊天路由复用本模块的认证依赖。
+from my_tool.api.chat import router as chat_router
+app.include_router(chat_router)
