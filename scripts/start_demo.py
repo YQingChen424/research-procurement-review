@@ -20,7 +20,7 @@ if not secret_file.exists():
     secret_file.write_text(secrets.token_urlsafe(48), encoding='utf-8')
 os.environ['PILOT_JWT_SECRET'] = secret_file.read_text(encoding='utf-8')
 from sqlalchemy import select
-from my_tool.db.models import Chunk, Document, PasswordAccount, User
+from my_tool.db.models import Chunk, Document, PasswordAccount, ProcurementRequest, RequestVersion, User
 from my_tool.db.session import Session, engine, init_db
 from my_tool.services.knowledge import embed
 from my_tool.services.auth import hash_password
@@ -51,6 +51,24 @@ async def seed_demo():
             db.add(admin)
             await db.flush()
             db.add(PasswordAccount(user_id=admin.id, password_hash=hash_password(password)))
+        # 准备演示采购员和申请，接收人使用单独令牌确认交接。
+        reviewer = await db.scalar(select(User).where(User.username == 'demo-reviewer'))
+        reviewer_file = demo_dir / 'reviewer-token.txt'
+        if reviewer and not reviewer_file.exists():
+            raise RuntimeError('演示采购员令牌文件丢失，请检查本地演示目录。')
+        if reviewer is None:
+            reviewer_token = secrets.token_urlsafe(32)
+            reviewer_file.write_text(reviewer_token, encoding='utf-8')
+            reviewer = User(username='demo-reviewer', role='reviewer', token_hash=hashlib.sha256(reviewer_token.encode()).hexdigest())
+            db.add(reviewer)
+            await db.flush()
+        request = await db.scalar(select(ProcurementRequest).where(ProcurementRequest.business_id == 'DEMO-001'))
+        if request is None:
+            request = ProcurementRequest(business_id='DEMO-001', owner_id=user.id)
+            db.add(request)
+            await db.flush()
+            payload = {'business_id':'DEMO-001','version':'v1','cas':'64-17-5','concentration':'70%','package':'500 mL','budget_approval_present':True,'hazardous':False,'cold_chain':False}
+            db.add(RequestVersion(request_id=request.id, version='v1', payload=payload))
         doc = await db.scalar(select(Document).where(Document.title == '模拟科研采购制度'))
         if doc is None:
             doc = Document(title='模拟科研采购制度', version='demo-v1', source='data/sample_procurement_policy.md', created_by=user.id)
@@ -65,7 +83,9 @@ async def seed_demo():
 
 if __name__ == '__main__':
     asyncio.run(seed_demo())
-    print('演示页面：http://127.0.0.1:8765/chat-ui')
+    port = int(os.getenv('PILOT_DEMO_PORT', '8876'))
+    print(f'演示页面：http://127.0.0.1:{port}/chat-ui')
     print('演示令牌保存在 .local_demo/access-token.txt')
-    print('管理后台：http://127.0.0.1:8765/admin-ui；账号 demo-admin，密码在 .local_demo/admin-password.txt')
-    uvicorn.run('my_tool.api.app:app', host='127.0.0.1', port=8765, log_level='warning')
+    print(f'管理后台：http://127.0.0.1:{port}/admin-ui；账号 demo-admin，密码在 .local_demo/admin-password.txt')
+    print(f'核查交接：http://127.0.0.1:{port}/agent-ui；接收人令牌在 .local_demo/reviewer-token.txt')
+    uvicorn.run('my_tool.api.app:app', host='127.0.0.1', port=port, log_level='warning')

@@ -11,7 +11,7 @@
 <header><div><h1>科研采购制度助手</h1><p class="sub">查询试剂规格、冷链验收与采购交接制度</p></div><button class="secondary" id="new">新建会话</button></header>
 <div class="card auth"><label for="token">演示访问令牌</label><input id="token" type="password" autocomplete="off" placeholder="输入账号令牌"><button class="secondary" id="save">使用令牌</button></div>
 <section class="card chat"><div class="messages" id="messages"><div class="bubble assistant">你好，请输入科研采购制度相关的问题。我会展示可供核对的制度来源。</div></div><div class="status" id="status"></div><form class="composer" id="form"><textarea id="question" placeholder="例如：冷链试剂验收时需要检查什么？" required maxlength="2000"></textarea><button id="send">发送</button></form></section>
-<p class="note">请使用模拟数据。涉及危险品、冷链、预算等事项，请由授权人员复核。</p>
+<p class="note"><a href="/agent-ui">打开采购核查与交接</a> · 请使用模拟数据。涉及危险品、冷链、预算等事项，请由授权人员复核。</p>
 </main><script>
 // 令牌只保留在当前标签页，不写入网页或版本库。
 const token=document.querySelector('#token'), messages=document.querySelector('#messages'), status=document.querySelector('#status'), send=document.querySelector('#send'), question=document.querySelector('#question');

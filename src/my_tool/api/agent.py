@@ -8,7 +8,7 @@ from time import perf_counter
 
 import httpx
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, update
 from my_tool.api.app import Actor, DB, visible_version
@@ -57,6 +57,10 @@ async def choose_tool(question, completed, mode, observations):
     if name not in TOOLS:
         raise ValueError('未知工具')
     return name
+
+@router.get('/agent-ui', include_in_schema=False)
+async def agent_page():
+    return FileResponse(Path(__file__).resolve().parent / 'agent.html')
 
 @router.post('/agent/run')
 async def agent_run(data: AgentInput, actor: Actor, db: DB):

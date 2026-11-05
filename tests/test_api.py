@@ -80,6 +80,26 @@ class PilotFlowTest(unittest.TestCase):
             followup = client.post('/chat', json={'session_id':chat_id, 'question':'缺了它怎么办？'}, headers=auth('alice'))
             self.assertIn('温度记录', followup.text)
             self.assertEqual(client.get('/chat-ui').status_code, 200)
+            self.assertEqual(client.get('/agent-ui').status_code, 200)
+            from datetime import timedelta
+            from my_tool.db.models import ChatLease, now
+            async def install_lease(expired=False):
+                async with Session() as db:
+                    db.add(ChatLease(conversation_id=chat_id, owner_token='other-process', expires_at=now()+timedelta(seconds=-1 if expired else 300)))
+                    await db.commit()
+            async def clear_lease():
+                async with Session() as db:
+                    lease=await db.get(ChatLease,chat_id)
+                    if lease:
+                        await db.delete(lease)
+                        await db.commit()
+            client.portal.call(install_lease)
+            busy=client.post('/chat', json={'session_id':chat_id,'question':'冷链试剂验收'},headers=auth('alice'))
+            self.assertEqual(busy.status_code,409)
+            client.portal.call(clear_lease)
+            client.portal.call(install_lease,True)
+            recovered=client.post('/chat', json={'session_id':chat_id,'question':'冷链试剂验收'},headers=auth('alice'))
+            self.assertIn('event: done',recovered.text)
             unknown = client.post('/chat', json={'question':'火星宇宙飞船引擎的工作原理是什么？'}, headers=auth('alice'))
             self.assertIn('制度中未找到', unknown.text)
             from unittest.mock import patch

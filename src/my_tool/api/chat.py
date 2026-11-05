@@ -2,22 +2,24 @@
 import asyncio
 import json
 import os
+import secrets
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from my_tool.api.app import Actor, DB
-from my_tool.db.models import Audit, Chunk, Conversation, Document, Message, PromptTemplate
+from my_tool.db.models import Audit, ChatLease, Chunk, Conversation, Document, Message, PromptTemplate, now
 from my_tool.db.session import Session
 from my_tool.services.knowledge import embed, provider_name
 from my_tool.services.retrieval import rank_policy_chunks, retrieval_question
 
 router = APIRouter()
-locks = {}
 
 class ChatInput(BaseModel):
     session_id: int | None = None
@@ -79,15 +81,20 @@ async def chat(data: ChatInput, request: Request, actor: Actor, db: DB):
         await db.commit()
         await db.refresh(conversation)
     session_id, actor_id = conversation.id, actor.id
-    lock = locks.setdefault(session_id, asyncio.Lock())
-    if lock.locked():
-        raise HTTPException(409, detail={'code': 'SESSION_BUSY', 'message': '该会话正在生成回答，请稍后重试'})
-    await lock.acquire()
+    # 以数据库唯一约束跨进程互斥，过期租约可恢复；单次生成最多四分钟。
+    lease_token = secrets.token_urlsafe(32)
+    await db.execute(delete(ChatLease).where(ChatLease.conversation_id == session_id, ChatLease.expires_at <= now()))
+    db.add(ChatLease(conversation_id=session_id, owner_token=lease_token, expires_at=now()+timedelta(minutes=5)))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, detail={'code': 'SESSION_BUSY', 'message': '该会话正在生成回答，请稍后重试'}) from None
 
     async def stream():
         try:
             yield event('status', {'session_id': session_id, 'message': '正在检索采购制度…'})
-            async with Session() as session:
+            async with asyncio.timeout(240), Session() as session:
                 # 成对读取最近六轮，避免将不完整历史传给模型。
                 rows = (await session.scalars(select(Message).where(Message.conversation_id == session_id).order_by(Message.id.desc()).limit(12))).all()
                 rows.reverse()
@@ -120,5 +127,8 @@ async def chat(data: ChatInput, request: Request, actor: Actor, db: DB):
         except Exception:
             yield event('error', {'code': 'CHAT_FAILED', 'message': '检索或生成失败，请检查服务配置后重试。'})
         finally:
-            lock.release()
+            # 比对随机令牌后删除，防止误释放后续请求的新租约。
+            async with Session() as release_session:
+                await release_session.execute(delete(ChatLease).where(ChatLease.conversation_id == session_id, ChatLease.owner_token == lease_token))
+                await release_session.commit()
     return StreamingResponse(stream(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
