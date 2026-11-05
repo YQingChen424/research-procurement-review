@@ -1,16 +1,18 @@
 """试点管理后台：登录、制度上传、提示词与经授权的审计。"""
 import asyncio
-from datetime import datetime
+import hashlib
+import secrets
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from my_tool.api.app import Actor, DB, audit, require, save
-from my_tool.db.models import Chunk, Conversation, Document, Message, MessageFlag, PasswordAccount, PromptTemplate, User
-from my_tool.services.auth import issue_token, verify_password
+from my_tool.db.models import Chunk, Conversation, Document, LoginAttempt, LoginSession, Message, MessageFlag, PasswordAccount, PromptTemplate, User, now
+from my_tool.services.auth import decode_token, issue_token, verify_password
 from my_tool.services.knowledge import embed, provider_name
 
 router = APIRouter()
@@ -30,18 +32,43 @@ async def admin_ui():
     return FileResponse(Path(__file__).resolve().parent / 'admin.html')
 
 @router.post('/auth/login')
-async def login(data: LoginInput, db: DB):
+async def login(data: LoginInput, request: Request, db: DB):
+    # 使用服务器接收的客户端地址和账号哈希限速，不信任客户端提供的转发头。
+    address = request.client.host if request.client else 'unknown'
+    attempt_key = hashlib.sha256((address + '\0' + data.username.casefold()).encode()).hexdigest()
+    recent = await db.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key_hash == attempt_key, LoginAttempt.created_at >= now() - timedelta(minutes=10)))
+    if recent >= 5:
+        raise HTTPException(429, detail={'code':'LOGIN_RATE_LIMIT','message':'登录尝试过多，请十分钟后重试'})
     user = await db.scalar(select(User).where(User.username == data.username, User.active.is_(True)))
     account = await db.get(PasswordAccount, user.id) if user else None
     if not account or not await asyncio.to_thread(verify_password, data.password, account.password_hash):
+        db.add(LoginAttempt(key_hash=attempt_key))
+        await db.commit()
         raise HTTPException(401, detail={'code':'LOGIN_FAILED','message':'账号或密码错误'})
+    session_id = secrets.token_urlsafe(32)
     try:
-        token = issue_token(user.id)
+        token = issue_token(user.id, session_id)
     except RuntimeError:
         raise HTTPException(503, detail={'code':'AUTH_NOT_CONFIGURED','message':'登录服务尚未配置'})
+    await db.execute(delete(LoginAttempt).where(LoginAttempt.key_hash == attempt_key))
+    db.add(LoginSession(id=session_id, user_id=user.id))
     audit(db, user, 'login', 'user', user.id)
     await save(db)
     return {'access_token': token, 'token_type': 'bearer', 'expires_in': 1800, 'role': user.role}
+
+@router.post('/auth/logout')
+async def logout(actor: Actor, db: DB, authorization: str = Header(...)):
+    try:
+        user_id, session_id = decode_token(authorization[7:])
+    except Exception:
+        raise HTTPException(400, '仅支持退出 JWT 登录') from None
+    item = await db.get(LoginSession, session_id)
+    if not item or item.user_id != actor.id or user_id != actor.id:
+        raise HTTPException(401, '会话无效')
+    item.revoked_at = now()
+    audit(db, actor, 'logout', 'user', actor.id)
+    await save(db)
+    return {'message':'已退出登录'}
 
 def extract_document(filename, content):
     suffix = Path(filename).suffix.lower()

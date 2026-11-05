@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from my_tool.core.review import review_request
-from my_tool.db.models import Audit, Chunk, Conversation, Document, Handoff, Message, ProcurementRequest, PromptTemplate, RequestVersion, Review, User, now
+from my_tool.db.models import Audit, Chunk, Conversation, Document, Handoff, LoginSession, Message, ProcurementRequest, PromptTemplate, RequestVersion, Review, User, now
 from my_tool.db.session import engine, get_session, init_db
 from my_tool.services.knowledge import answer, cosine, embed, provider_name
 
@@ -33,7 +33,9 @@ async def current_user(db: DB, authorization: Annotated[str | None, Header()] = 
     if not user:
         try:
             from my_tool.services.auth import decode_token
-            user = await db.get(User, decode_token(authorization[7:]))
+            user_id, session_id = decode_token(authorization[7:])
+            token_session = await db.get(LoginSession, session_id)
+            user = await db.get(User, user_id) if token_session and token_session.user_id == user_id and token_session.revoked_at is None else None
         except Exception:
             user = None
     if not user or not user.active:

@@ -29,9 +29,10 @@ def signing_key():
         raise RuntimeError('请配置至少 32 个字符的 PILOT_JWT_SECRET')
     return key
 
-def issue_token(user_id):
+def issue_token(user_id, session_id):
     now = datetime.now(timezone.utc)
-    return jwt.encode({'sub': str(user_id), 'iat': now, 'exp': now + timedelta(minutes=30), 'iss': 'procurement-pilot'}, signing_key(), algorithm='HS256')
+    return jwt.encode({'sub': str(user_id), 'jti': session_id, 'iat': now, 'exp': now + timedelta(minutes=30), 'iss': 'procurement-pilot'}, signing_key(), algorithm='HS256')
 
 def decode_token(token):
-    return int(jwt.decode(token, signing_key(), algorithms=['HS256'], issuer='procurement-pilot', options={'require':['sub','iat','exp','iss']})['sub'])
+    claims = jwt.decode(token, signing_key(), algorithms=['HS256'], issuer='procurement-pilot', options={'require':['sub','jti','iat','exp','iss']})
+    return int(claims['sub']), claims['jti']

@@ -107,6 +107,19 @@ class PasswordAccount(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), primary_key=True)
     password_hash: Mapped[str] = mapped_column(String(200))
 
+class LoginSession(Base):
+    __tablename__ = 'login_sessions'
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class LoginAttempt(Base):
+    __tablename__ = 'login_attempts'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
 class PromptTemplate(Base):
     __tablename__ = 'prompt_templates'
     id: Mapped[int] = mapped_column(primary_key=True)

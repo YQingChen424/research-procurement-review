@@ -142,6 +142,11 @@ class PilotFlowTest(unittest.TestCase):
                 with patch('my_tool.api.chat.generate_answer',check_template):
                     client.post('/chat',json={'question':'采购试剂浓度和包装'},headers=auth('alice'))
                 self.assertEqual(captured_template[-1],'请引用制度内容。')
+                for _ in range(5):
+                    self.assertEqual(client.post('/auth/login', json={'username':'no-such-account','password':'invalid'}).status_code, 401)
+                self.assertEqual(client.post('/auth/login', json={'username':'no-such-account','password':'invalid'}).status_code, 429)
+                self.assertEqual(client.post('/auth/logout',headers=admin_auth).status_code,200)
+                self.assertEqual(client.get('/me',headers=admin_auth).status_code,401)
             os.environ.pop('AGENT_MODEL', None)
             policy_run = client.post('/agent/run', json={'question':'冷链试剂验收温度记录'}, headers=auth('alice'))
             self.assertIn('search_policy', policy_run.text)
