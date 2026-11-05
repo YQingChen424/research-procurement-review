@@ -16,3 +16,11 @@ secrets*.json
 review.json
 .DS_Store
 Thumbs.db
+
+# Local pilot database
+*.db
+*.db-shm
+*.db-wal
+
+# Local FAISS prototype index
+.rag_index/

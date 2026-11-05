@@ -1,5 +1,7 @@
 # Discovery and design
 
+> This document describes the original CLI discovery baseline. The later pilot API and its limits are described in [pilot-api.md](pilot-api.md) and [architecture.md](architecture.md).
+
 ## Source and status
 
 This project documents the **synthetic** “澄岳研究院 / 科研采购与供应商交付” case in the [FDE discovery lab](https://fde-discovery-lab-67046.app.workbuddy.host/lab?case=research-procurement). Six roles were interviewed on 2026-10-23. The lab recorded **24/36** interview facts and generated six candidate needs. Interview statements are case evidence, not observed production performance or approved policy. The open questions below must be resolved before a live pilot.

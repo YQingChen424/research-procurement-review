@@ -1,54 +1,21 @@
-# Research Procurement Review
+# 科研采购审核与交接助手
 
-A read-only, rule-based prototype for a **synthetic** research procurement case. It checks reagent concentration, package size, source freshness, cold-chain evidence, approvals, and handoff confirmation. Every result remains subject to human review. The discovery findings and evidence IDs are in [docs/design.md](docs/design.md).
+本项目针对**模拟案例**中的科研试剂采购，提供确定性规格检查和可追溯交接。现有 CLI 以本地 JSON 为输入；第一阶段新增 FastAPI、数据库、基于制度文本的演示检索、人工复核和交接记录。
 
-## Why this project exists
+项目只提供审核辅助。规则通过不等于采购批准；系统不会选择供应商、替代安全审批、付款或写入外部采购系统。所有示例均为虚构数据，当前服务还不是生产系统。
 
-The discovery lab recorded 24 of 36 available facts across six roles on 2026-10-23. The strongest first pilot is specification review plus traceable handoff. The current process handles about 160 requests/month, with an average of four confirmation rounds of 20 minutes each. The management goal is to move average procurement duration from 18 to 10 days and urgent purchases from 27% to below 12%; those are **goals, not demonstrated outcomes**. The proposed pilot covers 20 common reagents for six weeks, with at least 98% specification review accuracy and a lower urgent-purchase share. The remaining facts and real-world source material still need validation.
+请从 [第一阶段 API 启动与操作指南](docs/pilot-api.md) 开始。独立的命令行混合检索问答实验见 [RAG 原型指南](docs/rag-prototype.md)。设计依据及未确认事项见 [项目设计](docs/design.md)，原 CLI 格式见 [CLI 接口](docs/api.md)。
 
-![Procurement review flowchart](docs/flowchart.png)
-
-The editable source is [scripts/render_flowchart.py](scripts/render_flowchart.py), which generates both [PNG](docs/flowchart.png) and [SVG](docs/flowchart.svg).
-
-## Install
-
-Python 3.11+ is recommended.
-
-```bash
-python -m venv .venv
-python -m pip install -r requirements.txt
-```
-
-Activate the environment using your shell's usual command. For local source imports, set `PYTHONPATH=src` on macOS/Linux or `$env:PYTHONPATH="src"` in PowerShell.
-
-## Run
-
-From the repository root:
-
-```bash
-PYTHONPATH=src python -m my_tool.main review --input data/sample_requests.json --as-of 2026-10-23
-PYTHONPATH=src python -m my_tool.main review --input data/sample_requests.json --as-of 2026-10-23 --output review.json
-PYTHONPATH=src python -m unittest discover -s tests -v
-```
-
-PowerShell:
+## 现有 CLI
 
 ```powershell
-$env:PYTHONPATH = "src"
+$env:PYTHONPATH = 'src'
 python -m my_tool.main review --input data/sample_requests.json --as-of 2026-10-23
 python -m unittest discover -s tests -v
 ```
 
-The sample is fabricated. The tool never writes to procurement systems, selects a supplier, approves hazardous materials, or makes a payment. A `ready_for_human_review` result means its local checks passed; it is **not** purchase approval.
+模拟案例提出了 20 种试剂、6 周试点，以及采购时长和紧急采购占比的改进目标；这些是待验证的设想，并非已实现的结果。详见设计文档。
 
-## Project layout
+![采购审核流程](docs/flowchart.png)
 
-`src/my_tool/` contains the CLI, core checks, and file utilities. `docs/` describes the research and JSON interface. `tests/`, `examples/`, `scripts/`, `config/`, `data/`, and `.github/` follow the requested GitHub project framework.
-
-## Pilot decision
-
-Start with a read-only 20-reagent sample and double-check each suggestion with procurement staff. Record business ID, data version, receiver confirmation, missing evidence, and review result. Before deployment, confirm the reagent list, field mapping, reviewer names, approval matrix, anomaly frequency, baseline measurement window, data retention, and system access. See [docs/design.md](docs/design.md).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+许可证：[MIT](LICENSE)。
