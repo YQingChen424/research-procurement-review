@@ -35,7 +35,7 @@ async def choose_tool(question, completed, mode, observations):
     """默认使用确定性模拟规划器；配置 AGENT_MODEL 时使用兼容工具调用 API。"""
     model = os.getenv('AGENT_MODEL', '')
     if not model:
-        plans = {'policy':['search_policy','finish'], 'evidence':['get_request','check_evidence','finish'],
+        plans = {'policy':['search_policy','finish'], 'spec':['get_request','lookup_catalog','review_specification','finish'], 'evidence':['get_request','check_evidence','finish'],
                  'handoff':['get_request','lookup_catalog','review_specification','check_evidence','prepare_handoff']}
         return plans[mode][min(len(completed), len(plans[mode])-1)]
     base, key = os.getenv('MODEL_API_BASE', '').rstrip('/'), os.getenv('MODEL_API_KEY', '')
@@ -66,7 +66,7 @@ async def agent_run(data: AgentInput, actor: Actor, db: DB):
     await db.commit()
     await db.refresh(run)
     run_id, actor_id = run.id, actor.id
-    mode = 'policy' if data.version_id is None else ('handoff' if data.receiver_id is not None else 'evidence')
+    mode = 'policy' if data.version_id is None else ('handoff' if data.receiver_id is not None else ('spec' if any(word in data.question.lower() for word in ('规格', 'cas', '候选')) else 'evidence'))
 
     async def stream():
         completed, state, observations = [], {}, []
@@ -75,8 +75,8 @@ async def agent_run(data: AgentInput, actor: Actor, db: DB):
             run_row = await session.get(AgentRun, run_id)
             try:
                 for _ in range(5):
-                    tool = await choose_tool(data.question, completed, mode, observations)
                     started = perf_counter()
+                    tool = await choose_tool(data.question, completed, mode, observations)
                     result = {}
                     # 所有工具都由服务端验证调用顺序和用户可见性。
                     if tool == 'finish':

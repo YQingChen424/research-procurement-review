@@ -77,6 +77,8 @@ class PilotFlowTest(unittest.TestCase):
             history = client.get(f'/conversations/{chat_id}', headers=auth('alice')).json()
             self.assertEqual([m['role'] for m in history['messages']], ['user', 'assistant'])
             self.assertEqual(client.post('/chat', json={'session_id':chat_id, 'question':'继续说'}, headers=auth('bob')).status_code, 404)
+            followup = client.post('/chat', json={'session_id':chat_id, 'question':'缺了它怎么办？'}, headers=auth('alice'))
+            self.assertIn('温度记录', followup.text)
             self.assertEqual(client.get('/chat-ui').status_code, 200)
             unknown = client.post('/chat', json={'question':'火星宇宙飞船引擎的工作原理是什么？'}, headers=auth('alice'))
             self.assertIn('制度中未找到', unknown.text)

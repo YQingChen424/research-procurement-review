@@ -14,7 +14,7 @@ from my_tool.api.app import Actor, DB
 from my_tool.db.models import Audit, Chunk, Conversation, Document, Message, PromptTemplate
 from my_tool.db.session import Session
 from my_tool.services.knowledge import embed, provider_name
-from my_tool.services.retrieval import rank_policy_chunks
+from my_tool.services.retrieval import rank_policy_chunks, retrieval_question
 
 router = APIRouter()
 locks = {}
@@ -95,9 +95,10 @@ async def chat(data: ChatInput, request: Request, actor: Actor, db: DB):
                 for i in range(0, len(rows) - 1, 2):
                     if rows[i].role == 'user' and rows[i+1].role == 'assistant':
                         history.extend([{'role': 'user', 'content': rows[i].content}, {'role': 'assistant', 'content': rows[i+1].content}])
-                vector = await embed(data.question)
+                query = retrieval_question(data.question, history)
+                vector = await embed(query)
                 records = (await session.execute(select(Chunk, Document).join(Document).where(Document.status == 'active', Chunk.embedding_model == provider_name()))).all()
-                ranked = await asyncio.to_thread(rank_policy_chunks, data.question, vector, records)
+                ranked = await asyncio.to_thread(rank_policy_chunks, query, vector, records)
                 citations = [{'document_id': d.id, 'title': d.title, 'version': d.version, 'source': d.source, 'paragraph': c.position, 'content': c.content} for c, d in ranked]
                 yield event('citations', {'items': citations})
                 pieces = []

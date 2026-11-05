@@ -23,3 +23,5 @@ python -m unittest discover -s tests -v
 ## 本机一键演示
 
 在项目根目录安装依赖后运行 `python scripts/start_demo.py`，打开 `http://127.0.0.1:8765/chat-ui`。在页面中输入 `.local_demo/access-token.txt` 文件中的演示令牌。此启动方式使用独立的模拟数据库和本地摘录，不调用外部大模型；关闭运行脚本的终端即可停止服务。演示数据库与令牌不会提交到 Git。
+
+本地演示的管理后台为 `http://127.0.0.1:8765/admin-ui`，账号 `demo-admin`，密码保存在 `.local_demo/admin-password.txt`。仅用于虚构数据。模拟评测运行 `python scripts/run_evaluation.py`，结果仍需人工判分，详情见 [评测说明](evaluation/README.md)。

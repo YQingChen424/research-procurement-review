@@ -27,3 +27,6 @@ Thumbs.db
 
 # Isolated local demo database and token
 .local_demo/
+
+# Local evaluation outputs
+evaluation/runs/

@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from my_tool.core.review import review_request
-from my_tool.db.models import Audit, Chunk, Conversation, Document, Handoff, Message, ProcurementRequest, RequestVersion, Review, User, now
+from my_tool.db.models import Audit, Chunk, Conversation, Document, Handoff, Message, ProcurementRequest, PromptTemplate, RequestVersion, Review, User, now
 from my_tool.db.session import engine, get_session, init_db
 from my_tool.services.knowledge import answer, cosine, embed, provider_name
 
@@ -330,7 +330,8 @@ async def ask(data: QuestionInput, actor: Actor, db: DB):
     rows = (await db.execute(select(Chunk, Document).join(Document).where(Document.status == 'active', Chunk.embedding_model == provider_name()))).all()
     ranked = sorted(((cosine(vector, c.embedding), c, d) for c, d in rows), key=lambda x: x[0], reverse=True)
     citations = [{'document_id': d.id, 'title': d.title, 'version': d.version, 'source': d.source, 'paragraph': c.position, 'content': c.content} for score, c, d in ranked[:3] if score >= 0.25]
-    result = await answer(data.question, citations)
+    template = await db.scalar(select(PromptTemplate).order_by(PromptTemplate.id.desc()).limit(1))
+    result = await answer(data.question, citations, template.content if template else None)
     db.add_all([Message(conversation_id=conversation.id, role='user', content=data.question, citations=[]), Message(conversation_id=conversation.id, role='assistant', content=result, citations=citations)])
     audit(db, actor, 'ask', 'conversation', conversation.id)
     await save(db)

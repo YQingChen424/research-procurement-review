@@ -38,3 +38,13 @@ def rank_policy_chunks(question, vector, records):
             if values[i] > threshold:
                 combined[i] = combined.get(i, 0) + 1 / (60 + position)
     return [records[i] for i in sorted(combined, key=lambda i: (-combined[i], i))[:3]]
+
+
+def retrieval_question(question, history):
+    """演示模式下为含指代的追问附上上一轮用户问题，供检索使用。"""
+    cues = ('它', '这个', '那个', '这样', '这些', '他', '她', '那谁', '那这个', '那这个制度', '等价品')
+    if any(cue in question for cue in cues):
+        previous = next((item['content'] for item in reversed(history) if item['role'] == 'user'), '')
+        if previous:
+            return previous + ' ' + question
+    return question

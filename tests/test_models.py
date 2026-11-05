@@ -31,7 +31,7 @@ class ExternalModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(item[1] == 'Bearer test-token' for item in received))
         self.assertEqual(received[0][2]['model'], 'test-embedding')
         self.assertEqual(received[1][2]['model'], 'test-chat')
-        self.assertIn('检查温度记录', received[1][2]['messages'][1]['content'])
+        self.assertIn('检查温度记录', received[1][2]['messages'][-1]['content'])
 
     async def test_invalid_dimensions_are_rejected(self):
         real_client = httpx.AsyncClient
