@@ -7,7 +7,7 @@ from docx import Document
 from docx.shared import Cm,Pt
 from docx.enum.section import WD_ORIENT
 from docx.oxml.ns import qn
-ROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/'course-delivery'; D=OUT/'docs'; T=OUT/'Test'; S=OUT/'src'
+ROOT=Path(__file__).resolve().parents[1]; D=ROOT/'docs'; T=ROOT/'tests'; S=ROOT/'src'
 for p in (D,T,S,D/'访谈资料',D/'流程图',T/'figures'):p.mkdir(parents=True,exist_ok=True)
 def write(path,text):path.write_text(text.strip()+'\n',encoding='utf-8')
 def draw(path,title,items):
@@ -175,7 +175,7 @@ results=json.loads((T/'evidence.json').read_text(encoding='utf-8'))
 for case in results['cases']:
  name=case['name']; fig=T/'figures'/(name+'.png')
  draw(fig,name+'：自动测试过程',[('输入',case['input'],'n'),('操作',' → '.join(case['steps']),'n'),('预期',case['expected'],'h'),('实际结果',case['observed'],'n' if case['passed'] else 'e')])
- content=['# '+name+'测试过程','## 执行依据','受控模拟自动测试；流程图根据实测记录绘制，不是现场截图。','证据文件：Test/evidence.json；UTC时间：'+results['timestamp_utc'],'## 输入',case['input'],'## 执行步骤']
+ content=['# '+name+'测试过程','## 执行依据','受控模拟自动测试；流程图根据实测记录绘制，不是现场截图。','证据文件：tests/evidence.json；UTC时间：'+results['timestamp_utc'],'## 输入',case['input'],'## 执行步骤']
  content.extend([f'{i}. {v}' for i,v in enumerate(case['steps'],1)])
  content+=['## 预期与实际','预期：'+case['expected'],'实际：'+case['observed'],'结论：'+('通过' if case['passed'] else '失败'),'## 限制','仅覆盖当前一条模拟输入；不构成正式上线验收。']
  md=T/(name+'测试过程.md');write(md,'\n'.join(content));make_doc(md,T/(name+'测试.docx'),[fig])
@@ -185,15 +185,15 @@ for title in ['行业分析','需求定义与追溯矩阵','详细项目设计�
 make_doc(D/'访谈资料'/'典型事件访谈整理.md',D/'访谈资料'/'典型事件访谈整理.docx')
 make_doc(T/'量化测试方案.md',T/'量化测试方案.docx')
 make_doc(S/'源码与部署地址.md',S/'源码与部署地址.docx')
-write(OUT/'README.md','''# 科研采购课程交付包
+write(D/'课程交付说明.md','''# 科研采购课程交付包
 ## 已整理
 - docs/访谈资料：三轮训练角色事件访谈原文与整理、六角色历史事实摘录（Markdown、JSON、CSV）。摘录不是六人逐字稿。
 - docs/流程图：改造前后两张PNG；行业分析、需求与追溯、设计、报价ROI和运行手册均提供Word及Markdown。
-- Test：五类受控模拟自动测试数据、量化方案、每类过程图和Word；执行方法见量化方案。
+- tests：五类受控模拟自动测试数据、量化方案、每类过程图和Word；执行方法见量化方案。
 - src：源码入口、演示地址与公网部署状态；实际代码位于仓库 src/my_tool。
 ## 仍缺材料及验收
 六人完整原始访谈、四份平台原始简报、可公网访问的正式部署地址、企业真实数据和真实验收都未取得；不能以模拟事实、localhost或模拟测试结果替代。请在可访问平台和服务器后补齐，且勿将令牌、密码或真实敏感数据提交仓库。
 ## 生成与复测
 python scripts/run_course_tests.py
 安装python-docx与Pillow后，运行 python scripts/build_course_delivery.py。运行环境需要Windows中文字体。''')
-print(f'已生成交付文档：{OUT}；五类模拟测试 {results["passed"]}/{results["total"]}。')
+print(f'已生成交付文档至 docs、src、tests；五类模拟测试 {results["passed"]}/{results["total"]}。')

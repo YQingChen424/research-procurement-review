@@ -48,7 +48,7 @@ def main():
       sid=events[0]['session_id']; history=client.get('/conversations/'+str(sid),headers=auth('owner')).json()['messages']
       cases.append({'name':'故障场景','input':'模拟模型输出部分内容后失败','steps':['注入模型生成异常','发送聊天请求','检查错误事件与持久化记录'],'expected':'返回 error，不返回 done，不保存半轮消息','observed':f"错误事件={'event: error' in failed.text}；完成事件={'event: done' in failed.text}；保存消息={len(history)} 条",'passed':'event: error' in failed.text and 'event: done' not in failed.text and not history})
     report={'timestamp_utc':datetime.now(timezone.utc).isoformat(),'mode':'isolated_simulation','total':len(cases),'passed':sum(x['passed'] for x in cases),'cases':cases}
-    out=ROOT/'course-delivery'/'Test'/'evidence.json';out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    out=ROOT/'tests'/'evidence.json';out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print('5类场景：',report['passed'],'/',report['total'],'通过。')
     return 0 if report['passed']==report['total'] else 1
 if __name__=='__main__':raise SystemExit(main())
